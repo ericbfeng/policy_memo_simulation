@@ -6,6 +6,7 @@ def simulate_game(
     cost_low_safety=40,     # Cost if AI Company invests in low safety
     prob_bias_high=0.05,     # Bias probability if high safety is invested
     prob_bias_low=0.3,       # Bias probability if low safety is invested
+    kept_amount = .9,     # amount kept by Auditors
     auditor_check_cost=5,    # Cost for Auditor's thorough check
     wager_amount=50,         # Amount Auditor risks if filing a report
     fine_amount=1000         # Fine on AI Company if bias is confirmed
@@ -14,7 +15,7 @@ def simulate_game(
     In each round:
       1. The AI Company chooses high or low safety (incurring a cost).
          - If high: cost = -300; if low: cost = -100.
-      2. The Auditor decides whether to pay for due dilligence.
+      2. The Auditor decides whether to pay for due diligence.
          - If yes: cost = -5; if no: 0.
       3. If a bias signal is generated, the Auditor may place a wager.
          - If wager placed:
@@ -36,7 +37,6 @@ def simulate_game(
     history = []
     cumulative_ai = 0
     cumulative_auditor = 0
-
     for round_i in range(n_rounds):
         # 1. AI Company Safety Investment
         ai_invests_high = random.choice([True, False])
@@ -65,16 +65,19 @@ def simulate_game(
             is_biased = random.random() < prob_bias
             if is_biased:
                 # True Positive:
-                auditor_wager_effect += fine_amount + wager_amount  # net gain = fine_amount
+                auditor_wager_effect += fine_amount * kept_amount + wager_amount   # net gain = fine_amount
                 ai_wager_effect = -fine_amount
+                FTC_surplus = (fine_amount + wager_amount) - auditor_wager_effect
             else:
                 # False Positive:
                 auditor_wager_effect = -wager_amount
-                ai_wager_effect = wager_amount * 0.5
+                ai_wager_effect = wager_amount * 0.5 * kept_amount
+                FTC_surplus = wager_amount - ai_wager_effect
         else:
             wager_placed = False
             auditor_wager_effect = 0
             ai_wager_effect = 0
+            FTC_surplus = 0 
 
         incremental_ai = ai_safety_effect + ai_wager_effect
         incremental_auditor = auditor_check_effect + auditor_wager_effect
@@ -95,10 +98,12 @@ def simulate_game(
             'incremental_ai': incremental_ai,
             'incremental_auditor': incremental_auditor,
             'cumulative_ai': cumulative_ai,
-            'cumulative_auditor': cumulative_auditor
+            'cumulative_auditor': cumulative_auditor,
+            'ftc_surplus': FTC_surplus
         })
     
     return history, cumulative_ai, cumulative_auditor
+
 
 def summarize_buckets(history):
     """
@@ -111,43 +116,49 @@ def summarize_buckets(history):
     """
     buckets = {
         'ai_invests_high': {
-            'true': {'ai': [], 'auditor': []},
-            'false': {'ai': [], 'auditor': []}
+            'true': {'ai': [], 'auditor': [], 'ftc_surplus': []},
+            'false': {'ai': [], 'auditor': [], 'ftc_surplus': []}
         },
         'auditor_pays_for_check': {
-            'true': {'ai': [], 'auditor': []},
-            'false': {'ai': [], 'auditor': []}
+            'true': {'ai': [], 'auditor': [], 'ftc_surplus': []},
+            'false': {'ai': [], 'auditor': [], 'ftc_surplus': []}
         },
         'wager_placed': {
-            'true': {'ai': [], 'auditor': []},
-            'false': {'ai': [], 'auditor': []}
+            'true': {'ai': [], 'auditor': [], 'ftc_surplus': []},
+            'false': {'ai': [], 'auditor': [], 'ftc_surplus': []}
         }
     }
     
     for round_info in history:
-        # For ai_invests_high, record overall incremental outcome for AI Company.
+        # For ai_invests_high, record overall incremental outcome for AI Company and FTC surplus.
         if round_info['ai_invests_high']:
             buckets['ai_invests_high']['true']['ai'].append(round_info['incremental_ai'])
             buckets['ai_invests_high']['true']['auditor'].append(round_info['incremental_auditor'])
+            buckets['ai_invests_high']['true']['ftc_surplus'].append(round_info['ftc_surplus'])
         else:
             buckets['ai_invests_high']['false']['ai'].append(round_info['incremental_ai'])
             buckets['ai_invests_high']['false']['auditor'].append(round_info['incremental_auditor'])
+            buckets['ai_invests_high']['false']['ftc_surplus'].append(round_info['ftc_surplus'])
             
-        # For auditor_pays_for_check, record overall incremental outcome for Auditor.
+        # For auditor_pays_for_check, record overall incremental outcome for Auditor and FTC surplus.
         if round_info['auditor_pays_for_check']:
             buckets['auditor_pays_for_check']['true']['auditor'].append(round_info['incremental_auditor'])
             buckets['auditor_pays_for_check']['true']['ai'].append(round_info['incremental_ai'])
+            buckets['auditor_pays_for_check']['true']['ftc_surplus'].append(round_info['ftc_surplus'])
         else:
             buckets['auditor_pays_for_check']['false']['auditor'].append(round_info['incremental_auditor'])
             buckets['auditor_pays_for_check']['false']['ai'].append(round_info['incremental_ai'])
+            buckets['auditor_pays_for_check']['false']['ftc_surplus'].append(round_info['ftc_surplus'])
             
-        # For wager_placed, record overall round outcome if wager was placed; else 0.
+        # For wager_placed, record overall round outcome if wager was placed; else 0, and FTC surplus.
         if round_info['wager_placed']:
             buckets['wager_placed']['true']['ai'].append(round_info['incremental_ai'])
             buckets['wager_placed']['true']['auditor'].append(round_info['incremental_auditor'])
+            buckets['wager_placed']['true']['ftc_surplus'].append(round_info['ftc_surplus'])
         else:
             buckets['wager_placed']['false']['ai'].append(0)
             buckets['wager_placed']['false']['auditor'].append(0)
+            buckets['wager_placed']['false']['ftc_surplus'].append(0)
     
     summary = {}
     for bucket, groups in buckets.items():
@@ -155,10 +166,12 @@ def summarize_buckets(history):
         for group, outcomes in groups.items():
             avg_ai = sum(outcomes['ai']) / len(outcomes['ai']) if outcomes['ai'] else 0
             avg_auditor = sum(outcomes['auditor']) / len(outcomes['auditor']) if outcomes['auditor'] else 0
+            avg_ftc_surplus = sum(outcomes['ftc_surplus']) / len(outcomes['ftc_surplus']) if outcomes['ftc_surplus'] else 0
             summary[bucket][group] = {
                 'count': len(outcomes['ai']),
                 'avg_ai_outcome': avg_ai,
-                'avg_auditor_outcome': avg_auditor
+                'avg_auditor_outcome': avg_auditor,
+                'avg_ftc_surplus': avg_ftc_surplus
             }
     return summary
 
@@ -174,30 +187,36 @@ def main():
     print("\nDecision: ai_invests_high")
     print("  True Decisions: Count =", bucket_summary['ai_invests_high']['true']['count'],
           "Average AI Outcome =", bucket_summary['ai_invests_high']['true']['avg_ai_outcome'],
-          "Average Auditor Outcome =", bucket_summary['ai_invests_high']['true']['avg_auditor_outcome'])
+          "Average Auditor Outcome =", bucket_summary['ai_invests_high']['true']['avg_auditor_outcome'],
+          "Average FTC Surplus =", bucket_summary['ai_invests_high']['true']['avg_ftc_surplus'])
     print("  False Decisions: Count =", bucket_summary['ai_invests_high']['false']['count'],
           "Average AI Outcome =", bucket_summary['ai_invests_high']['false']['avg_ai_outcome'],
-          "Average Auditor Outcome =", bucket_summary['ai_invests_high']['false']['avg_auditor_outcome'])
+          "Average Auditor Outcome =", bucket_summary['ai_invests_high']['false']['avg_auditor_outcome'],
+          "Average FTC Surplus =", bucket_summary['ai_invests_high']['false']['avg_ftc_surplus'])
     
     print("\nDecision: auditor_pays_for_check")
     print("  True Decisions: Count =", bucket_summary['auditor_pays_for_check']['true']['count'],
           "Average AI Outcome =", bucket_summary['auditor_pays_for_check']['true']['avg_ai_outcome'],
-          "Average Auditor Outcome =", bucket_summary['auditor_pays_for_check']['true']['avg_auditor_outcome'])
+          "Average Auditor Outcome =", bucket_summary['auditor_pays_for_check']['true']['avg_auditor_outcome'],
+          "Average FTC Surplus =", bucket_summary['auditor_pays_for_check']['true']['avg_ftc_surplus'])
     print("  False Decisions: Count =", bucket_summary['auditor_pays_for_check']['false']['count'],
           "Average AI Outcome =", bucket_summary['auditor_pays_for_check']['false']['avg_ai_outcome'],
-          "Average Auditor Outcome =", bucket_summary['auditor_pays_for_check']['false']['avg_auditor_outcome'])
+          "Average Auditor Outcome =", bucket_summary['auditor_pays_for_check']['false']['avg_auditor_outcome'],
+          "Average FTC Surplus =", bucket_summary['auditor_pays_for_check']['false']['avg_ftc_surplus'])
     
     print("\nDecision: wager_placed")
     print("  True Decisions: Count =", bucket_summary['wager_placed']['true']['count'],
           "Average AI Outcome =", bucket_summary['wager_placed']['true']['avg_ai_outcome'],
-          "Average Auditor Outcome =", bucket_summary['wager_placed']['true']['avg_auditor_outcome'])
+          "Average Auditor Outcome =", bucket_summary['wager_placed']['true']['avg_auditor_outcome'],
+          "Average FTC Surplus =", bucket_summary['wager_placed']['true']['avg_ftc_surplus'])
     print("  False Decisions: Count =", bucket_summary['wager_placed']['false']['count'],
           "Average AI Outcome =", bucket_summary['wager_placed']['false']['avg_ai_outcome'],
-          "Average Auditor Outcome =", bucket_summary['wager_placed']['false']['avg_auditor_outcome'])
+          "Average Auditor Outcome =", bucket_summary['wager_placed']['false']['avg_auditor_outcome'],
+          "Average FTC Surplus =", bucket_summary['wager_placed']['false']['avg_ftc_surplus'])
     
     # Sanity check for wager_placed for Auditor (False): should be 0.
     print("\nSanity Check for 'wager_placed' Bucket (Auditor, False):",
           bucket_summary['wager_placed']['false']['avg_auditor_outcome'])
 
 if __name__ == "__main__":
-    main()
+    main() 
