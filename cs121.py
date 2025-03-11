@@ -14,7 +14,7 @@ def simulate_game(
     In each round:
       1. The AI Company chooses high or low safety (incurring a cost).
          - If high: cost = -300; if low: cost = -100.
-      2. The Auditor decides whether to pay for a check.
+      2. The Auditor decides whether to pay for due dilligence.
          - If yes: cost = -5; if no: 0.
       3. If a bias signal is generated, the Auditor may place a wager.
          - If wager placed:
@@ -47,7 +47,7 @@ def simulate_game(
             prob_bias = prob_bias_low
             ai_safety_effect = -cost_low_safety
 
-        # 2. Auditor Check Decision
+        # 2. Auditor Check Decision for due diligence:
         auditor_pays_for_check = random.choice([True, False])
         if auditor_pays_for_check:
             auditor_check_effect = -auditor_check_cost
