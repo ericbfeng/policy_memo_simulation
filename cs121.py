@@ -6,7 +6,7 @@ def simulate_game(
     cost_low_safety=40,     # Cost if AI Company invests in low safety
     prob_bias_high=0.05,     # Bias probability if high safety is invested
     prob_bias_low=0.3,       # Bias probability if low safety is invested
-    kept_amount = .9,     # amount kept by Auditors
+    kept_amount = .9,        # Amount not kept by FTC
     auditor_check_cost=5,    # Cost for Auditor's thorough check
     wager_amount=50,         # Amount Auditor risks if filing a report
     fine_amount=1000         # Fine on AI Company if bias is confirmed
