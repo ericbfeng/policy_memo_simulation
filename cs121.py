@@ -2,13 +2,13 @@ import random
 
 def simulate_game(
     n_rounds=50,
-    cost_high_safety=300,    # Cost if AI Company invests in high safety
-    cost_low_safety=200,     # Cost if AI Company invests in low safety
+    cost_high_safety=100,    # Cost if AI Company invests in high safety
+    cost_low_safety=40,     # Cost if AI Company invests in low safety
     prob_bias_high=0.05,     # Bias probability if high safety is invested
-    prob_bias_low=0.5,       # Bias probability if low safety is invested
+    prob_bias_low=0.3,       # Bias probability if low safety is invested
     auditor_check_cost=5,    # Cost for Auditor's thorough check
-    wager_amount=10,         # Amount Auditor risks if filing a report
-    fine_amount=5000         # Fine on AI Company if bias is confirmed
+    wager_amount=50,         # Amount Auditor risks if filing a report
+    fine_amount=1000         # Fine on AI Company if bias is confirmed
 ):
     """
     In each round:
